@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4>Upload Certificate</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Your file will be encrypted using <strong>AES-256</strong> (Standard) 
+                    and the key secured with <strong>RSA-2048</strong> (Hybrid).
+                </p>
+                
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select PDF/Image</label>
+                        <input class="form-control" type="file" name="file" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        🔒 Encrypt & Upload
+                    </button>
+                </form>
+                
+                <div class="mt-3 text-center">
+                    <a href="{{ url_for('home') }}">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="text-danger">Admin Control Panel</h2>
+        
+        <div class="alert alert-warning">
+            <strong>Security Audit Mode:</strong> You have full access to view system metadata.
+        </div>
+
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Owner ID</th>
+                    <th>File</th>
+                    <th>Integrity Hash (Signature)</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cert in certs %}
+                <tr>
+                    <td>{{ cert.id }}</td>
+                    <td>User #{{ cert.student_id }}</td>
+                    <td>{{ cert.filename }}</td>
+                    <td>
+                        <small class="text-muted text-break">{{ cert.digital_signature[:20] }}...</small>
+                    </td>
+                    <td>{{ cert.upload_date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

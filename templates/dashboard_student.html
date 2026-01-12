@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">My Secure Locker</h2>
+        
+        <div class="card p-4 mb-4 shadow-sm">
+            <h5>Upload New Certificate</h5>
+            <p class="text-muted">Files will be AES-256 encrypted and digitally signed.</p>
+            <a href="{{ url_for('upload_file') }}" class="btn btn-primary">
+                + Upload PDF
+            </a>
+        </div>
+
+        <h4>My Documents</h4>
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>File ID</th>
+                    <th>Filename</th>
+                    <th>Upload Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cert in certs %}
+                <tr>
+                    <td>#{{ cert.id }}</td>
+                    <td>{{ cert.filename }}</td>
+                    <td>{{ cert.upload_date.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-success">Generate QR</button>
+                        <button class="btn btn-sm btn-outline-info">View</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">No certificates uploaded yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
