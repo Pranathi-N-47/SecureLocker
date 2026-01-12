@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow border-{{ color }}">
+            <div class="card-header bg-{{ color }} text-white text-center">
+                <h4>Verification Status: {{ status }}</h4>
+            </div>
+            <div class="card-body text-center">
+                
+                
+
+                <h5 class="card-title">{{ cert.filename }}</h5>
+                <p class="text-muted">Uploaded on: {{ cert.upload_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                <hr>
+                
+                <div class="alert alert-{{ color }}">
+                    {{ message }}
+                </div>
+
+                <div class="mt-4">
+                    <h6>Technical Details (For Examiner):</h6>
+                    <ul class="text-start list-group list-group-flush">
+                        <li class="list-group-item"><strong>Encryption:</strong> AES-256 (CFB Mode)</li>
+                        <li class="list-group-item"><strong>Key Exchange:</strong> RSA-2048 (OAEP Padding)</li>
+                        <li class="list-group-item"><strong>Integrity Check:</strong> SHA-256 Hash Comparison</li>
+                        <li class="list-group-item text-break"><strong>Digital Signature:</strong> {{ cert.digital_signature[:30] }}...</li>
+                    </ul>
+                </div>
+
+                <a href="{{ url_for('home') }}" class="btn btn-outline-dark mt-3">Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

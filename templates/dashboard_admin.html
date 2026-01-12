@@ -15,6 +15,7 @@
                     <th>ID</th>
                     <th>Owner ID</th>
                     <th>File</th>
+                    <th>Status</th>
                     <th>Integrity Hash (Signature)</th>
                     <th>Date</th>
                 </tr>
@@ -25,6 +26,13 @@
                     <td>{{ cert.id }}</td>
                     <td>User #{{ cert.student_id }}</td>
                     <td>{{ cert.filename }}</td>
+                    <td>
+                        {% if cert.is_public %}
+                        <span class="badge bg-success">Public</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Private</span>
+                        {% endif %}
+                    </td>
                     <td>
                         <small class="text-muted text-break">{{ cert.digital_signature[:20] }}...</small>
                     </td>

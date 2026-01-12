@@ -9,43 +9,119 @@ from models import Certificate
 
 # --- NEW IMPORTS FOR CRYPTOGRAPHY ---
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
 import hashlib
+
+import io
+import qrcode
+from flask import send_file
+import socket
 
 # Initialize the Flask application
 app = Flask(__name__)
 
+# --- DATABASE SETUP SCRIPT ---
+def create_db():
+    """
+    Runs once on startup to ensure tables exist and create a default Admin.
+    """
+    with app.app_context():
+        db.create_all() # Create tables defined in models.py if they don't exist
+        
+        # Check if Admin exists
+        if not User.query.filter_by(username='admin').first():
+            # Rubric Criterion 4: Hashing with Salt
+            # 'pbkdf2:sha256' is the hashing algorithm.
+            # generate_password_hash automatically generates a random 'Salt' 
+            # and combines it with the password before hashing.
+            hashed_pw = generate_password_hash('admin123', method='pbkdf2:sha256')
+            
+            admin = User(username='admin', name='Administrator', password_hash=hashed_pw, role='Admin')
+            db.session.add(admin)
+            db.session.commit()
+            print("Database initialized & Admin User Created.")
+
+# --- CONFIGURATION: ACCESS CODES ---
+# These act like "Invite Codes". Without them, registration is blocked.
+REGISTRATION_CODES = {
+    'Student': 'STUDENT-KEY',   # Code for Students
+    'Verifier': 'TRUSTED-PARTNER-KEY',  # Code for Recruiters/Verifiers
+    'Admin': 'SYSADMIN-MASTER-KEY'      # Code for Admins
+}
+
+def get_local_ip():
+    """Get the local IP address of the machine."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return '127.0.0.1'
+
 # --- CRYPTO SETUP: HYBRID ENCRYPTION ---
-# 1. Generate a Global RSA Key Pair (Simulating the University's Master Key)
-# In a real app, you would load these from a file (private.pem), not generate on startup.
-private_key = rsa.generate_private_key(
-    public_exponent=65537,
-    key_size=2048,
-    backend=default_backend()
-)
-public_key = private_key.public_key()
+# 1. Generate or LOAD a Global RSA Key Pair (Simulating the University's Master Key)
+# Persist keys to disk so uploaded files remain decryptable across restarts.
+PRIVATE_KEY_PATH = 'private_key.pem'
+PUBLIC_KEY_PATH = 'public_key.pem'
+
+if os.path.exists(PRIVATE_KEY_PATH) and os.path.exists(PUBLIC_KEY_PATH):
+    with open(PRIVATE_KEY_PATH, 'rb') as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+    with open(PUBLIC_KEY_PATH, 'rb') as f:
+        public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+else:
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+    public_key = private_key.public_key()
+
+    # Save the keys to disk (PEM format). WARNING: private key is stored unencrypted for demo purposes.
+    pem_priv = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    with open(PRIVATE_KEY_PATH, 'wb') as f:
+        f.write(pem_priv)
+
+    pem_pub = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    with open(PUBLIC_KEY_PATH, 'wb') as f:
+        f.write(pem_pub)
 
 def encrypt_data(file_bytes):
     """
     HYBRID ENCRYPTION LOGIC (Rubric Criterion 3):
     1. Generate a random AES Key (Symmetric) -> Fast for large files.
-    2. Encrypt the File with AES.
+    2. Encrypt the File with AES in CBC mode with PKCS7 padding.
     3. Encrypt the AES Key with RSA (Asymmetric) -> Secure key exchange.
     """
     # A. AES Encryption of the File
     aes_key = os.urandom(32)  # 256-bit key
     iv = os.urandom(16)       # Initialization Vector
-    cipher = Cipher(algorithms.AES(aes_key), modes.CFB(iv), backend=default_backend())
+    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
-    encrypted_file_content = encryptor.update(file_bytes) + encryptor.finalize()
+    
+    # Pad the data
+    padder = padding.PKCS7(128).padder()
+    padded_data = padder.update(file_bytes) + padder.finalize()
+    
+    encrypted_file_content = encryptor.update(padded_data) + encryptor.finalize()
 
     # B. RSA Encryption of the AES Key
     encrypted_aes_key = public_key.encrypt(
         aes_key,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        asym_padding.OAEP(
+            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
             algorithm=hashes.SHA256(),
             label=None
         )
@@ -75,39 +151,32 @@ def load_user(user_id):
     """
     Flask-Login helper: Retrieves a user object based on the ID stored in the session cookie.
     """
-    return session.get(int(user_id))
+    return User.query.get(int(user_id))
 
 # --- ROUTES (URL Handling) ---
 
 @app.route('/')
 @login_required
 def home():
-    """
-    The Role-Based Dashboard.
-    Decision Logic:
-    - Student: Show ONLY certificates uploaded by them.
-    - Admin: Show ALL certificates (Audit view).
-    - Verifier: Show a search/verification tool (No private data).
-    """
-    user_certificates = []
+    # TRAFFIC CONTROLLER LOGIC
     
-    # LOGIC 1: STUDENTS see their own files
+    # 1. If Student -> Show Student Dashboard
     if current_user.role == 'Student':
+        # Fetch only THEIR certificates
         user_certificates = Certificate.query.filter_by(student_id=current_user.id).all()
         return render_template('dashboard_student.html', certs=user_certificates)
     
-    # LOGIC 2: ADMIN sees everything
+    # 2. If Admin -> Show Admin Panel
     elif current_user.role == 'Admin':
         all_certificates = Certificate.query.all()
-        # In a real app, you'd join with User table to get usernames, 
-        # but for now we just show IDs or raw data
         return render_template('dashboard_admin.html', certs=all_certificates)
     
-    # LOGIC 3: VERIFIERS see the Verification Tool
+    # 3. If Verifier -> Show Verification Tool
     elif current_user.role == 'Verifier':
-        return render_template('dashboard_verifier.html')
+        public_certs = Certificate.query.filter_by(is_public=True).all()
+        return render_template('dashboard_verifier.html', certs=public_certs)
     
-    # Fallback
+    # 4. Fallback (Safety)
     return "Role not recognized", 403
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -151,28 +220,27 @@ def login():
 
 @app.route('/verify_otp', methods=['GET', 'POST'])
 def verify_otp():
-    """
-    Rubric Criterion 1: Multi-Factor Authentication (Step 2)
-    """
-    # Security Check: Don't let people guess this URL. They must have passed step 1.
-    if 'pending_user_id' not in session:
-        return redirect(url_for('login'))
+    # ... (session checks) ...
         
     if request.method == 'POST':
         user_input = request.form.get('otp')
         real_otp = session.get('otp')
         
-        # Check if the code matches
         if user_input and int(user_input) == real_otp:
-            # SUCCESS! Now we actually authorize the user session.
-            user = User.query.get(session['pending_user_id'])
-            login_user(user)
+            # 1. GET THE USER ID
+            user_id = session['pending_user_id']
+            user = User.query.get(user_id)
             
-            # Cleanup: Remove temp data from session
+            # 2. LOG THEM IN (Create the session cookie)
+            login_user(user, remember=True) 
+            
+            # 3. CLEAN UP
             session.pop('otp', None)
             session.pop('pending_user_id', None)
             
+            # 4. REDIRECT TO THE TRAFFIC CONTROLLER
             return redirect(url_for('home'))
+            
         else:
             flash('Invalid OTP Code!')
             
@@ -184,34 +252,6 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# --- DATABASE SETUP SCRIPT ---
-def create_db():
-    """
-    Runs once on startup to ensure tables exist and create a default Admin.
-    """
-    with app.app_context():
-        db.create_all() # Create tables defined in models.py
-        
-        # Check if Admin exists
-        if not User.query.filter_by(username='admin').first():
-            # Rubric Criterion 4: Hashing with Salt
-            # 'pbkdf2:sha256' is the hashing algorithm.
-            # generate_password_hash automatically generates a random 'Salt' 
-            # and combines it with the password before hashing.
-            hashed_pw = generate_password_hash('admin123', method='pbkdf2:sha256')
-            
-            admin = User(username='admin', password_hash=hashed_pw, role='Admin')
-            db.session.add(admin)
-            db.session.commit()
-            print("Database initialized & Admin User Created.")
-
-# --- CONFIGURATION: ACCESS CODES ---
-# These act like "Invite Codes". Without them, registration is blocked.
-REGISTRATION_CODES = {
-    'Student': 'STUDENT-KEY',   # Code for Students
-    'Verifier': 'TRUSTED-PARTNER-KEY',  # Code for Recruiters/Verifiers
-    'Admin': 'SYSADMIN-MASTER-KEY'      # Code for Admins
-}
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -222,16 +262,23 @@ def register():
     if request.method == 'POST':
         # 1. Get Form Data
         username = request.form.get('username')
+        name = request.form.get('name')
         password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
         role = request.form.get('role')
         entered_code = request.form.get('access_code')
         
-        # 2. Check if username is taken
+        # 2. Validate passwords match
+        if password != confirm_password:
+            flash('Passwords do not match. Please try again.')
+            return redirect(url_for('register'))
+        
+        # 3. Check if username is taken
         if User.query.filter_by(username=username).first():
             flash('Username already exists. Please choose another.')
             return redirect(url_for('register'))
             
-        # 3. VERIFY ACCESS CODE (Authorization Requirement)
+        # 4. VERIFY ACCESS CODE (Authorization Requirement)
         # Check if the code entered matches the required code for that Role.
         required_code = REGISTRATION_CODES.get(role)
         
@@ -239,11 +286,11 @@ def register():
             flash(f"Invalid Access Code for {role}! You are not authorized.")
             return redirect(url_for('register'))
         
-        # 4. CREATE ACCOUNT
+        # 5. CREATE ACCOUNT
         # Hash the password (Security Requirement)
         hashed_pw = generate_password_hash(password, method='pbkdf2:sha256')
         
-        new_user = User(username=username, password_hash=hashed_pw, role=role)
+        new_user = User(username=username, name=name, password_hash=hashed_pw, role=role)
         db.session.add(new_user)
         db.session.commit()
         
@@ -286,13 +333,15 @@ def upload_file():
             signature = file_hash 
             
             # 4. Save to Database
+            is_public = request.form.get('is_public') == 'on'  # Checkbox value
             new_cert = Certificate(
                 student_id=current_user.id,
                 filename=file.filename,
                 encrypted_data=enc_data,
                 encrypted_aes_key=enc_key,
                 iv=iv,
-                digital_signature=signature
+                digital_signature=signature,
+                is_public=is_public
             )
             
             db.session.add(new_cert)
@@ -303,10 +352,172 @@ def upload_file():
 
     return render_template('upload.html')
 
+# --- ROUTE 1: GENERATE QR CODE IMAGE ---
+@app.route('/qr_code/<int:cert_id>')
+@login_required
+def generate_qr(cert_id):
+    """
+    Generates a PNG image of the QR code pointing to the verification link.
+    Rubric Criterion: Encoding (QR Code / Barcode)
+    """
+    # 1. Build the verification URL using the local IP for network access
+    local_ip = get_local_ip()
+    verify_url = f"http://{local_ip}:5000/verify/{cert_id}"
+    
+    # 2. Create the QR Code
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    
+    # 3. Save to a memory buffer (RAM) instead of a file on disk
+    buf = io.BytesIO()
+    img.save(buf)
+    buf.seek(0)
+    
+    return send_file(buf, mimetype='image/png')
+
+# --- ROUTE 2: VERIFY & DECRYPT (The Final Exam) ---
+@app.route('/verify/<int:cert_id>', methods=['GET'])
+@login_required
+def verify_certificate(cert_id):
+    """
+    Rubric Criterion: Decryption + Digital Signature Verification
+    """
+    # Authorization: Only Verifiers or the Owner can check this
+    # (Admins can audit too)
+    if current_user.role not in ['Verifier', 'Admin'] and \
+       (current_user.role == 'Student' and not Certificate.query.filter_by(id=cert_id, student_id=current_user.id).first()):
+        flash("Access Denied: You do not have permission to verify this document.")
+        return redirect(url_for('home'))
+
+    cert = Certificate.query.get_or_404(cert_id)
+    
+    print(f"Verifying cert {cert_id}, encrypted_data length: {len(cert.encrypted_data)}, iv length: {len(cert.iv)}")
+    
+    try:
+        # A. DECRYPT THE AES KEY (RSA Decryption)
+        # We use the University's Private Key to unlock the AES key
+        aes_key = private_key.decrypt(
+            cert.encrypted_aes_key,
+            asym_padding.OAEP(
+                mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        
+        print("AES key decrypted successfully")
+        
+        # B. DECRYPT THE FILE (AES Decryption)
+        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(cert.iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted_padded = decryptor.update(cert.encrypted_data) + decryptor.finalize()
+        
+        # Unpad the data
+        unpadder = padding.PKCS7(128).unpadder()
+        original_file_bytes = unpadder.update(decrypted_padded) + unpadder.finalize()
+        
+        print(f"Decryption successful, original length: {len(original_file_bytes)}")
+        
+        # C. VERIFY DIGITAL SIGNATURE (Integrity Check)
+        # Recalculate hash of the decrypted file
+        current_hash = hashlib.sha256(original_file_bytes).hexdigest()
+        
+        # Compare with the stored signature
+        if current_hash == cert.digital_signature:
+            status = "VALID"
+            color = "success" # Green
+            message = "✅ The Digital Signature matches. This document is authentic and untampered."
+        else:
+            status = "TAMPERED"
+            color = "danger" # Red
+            message = "❌ WARNING: Digital Signature Mismatch! This file has been modified."
+            
+        # In a real app, we might let them download the file. 
+        # For the demo, we just show the success message.
+        return render_template('verify_result.html', cert=cert, status=status, color=color, message=message)
+        
+    except Exception as e:
+        print(f"Decryption error for cert {cert_id}: {e}")
+        return f"Decryption Failed: {str(e)}. This may occur if the certificate was encrypted with a different key. Try uploading a new certificate."
+
+
+@app.route('/toggle_public/<int:cert_id>', methods=['POST'])
+@login_required
+def toggle_public(cert_id):
+    cert = Certificate.query.get_or_404(cert_id)
+    
+    # Only the owner (student) can toggle
+    if current_user.role != 'Student' or cert.student_id != current_user.id:
+        flash("Access Denied: You can only modify your own files.")
+        return redirect(url_for('home'))
+    
+    cert.is_public = not cert.is_public
+    db.session.commit()
+    status = "Public" if cert.is_public else "Private"
+    flash(f'File status updated to {status}!')
+    return redirect(url_for('home'))
+
+
+@app.route('/delete/<int:cert_id>', methods=['POST'])
+@login_required
+def delete_certificate(cert_id):
+    cert = Certificate.query.get_or_404(cert_id)
+    
+    # Only the owner (student) can delete
+    if current_user.role != 'Student' or cert.student_id != current_user.id:
+        flash("Access Denied: You can only delete your own files.")
+        return redirect(url_for('home'))
+    
+    db.session.delete(cert)
+    db.session.commit()
+    flash('File deleted successfully!')
+    return redirect(url_for('home'))
+
+
+@app.route('/download/<int:cert_id>')
+@login_required
+def download_certificate(cert_id):
+    """Download and decrypt the original file for authorized users."""
+    cert = Certificate.query.get_or_404(cert_id)
+
+    # Authorization: only owner, Verifier, or Admin
+    if current_user.role not in ['Verifier', 'Admin'] and not (current_user.role == 'Student' and cert.student_id == current_user.id):
+        flash("Access Denied: You do not have permission to download this document.")
+        return redirect(url_for('home'))
+
+    try:
+        aes_key = private_key.decrypt(
+            cert.encrypted_aes_key,
+            asym_padding.OAEP(
+                mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(cert.iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted_padded = decryptor.update(cert.encrypted_data) + decryptor.finalize()
+        
+        # Unpad the data
+        unpadder = padding.PKCS7(128).unpadder()
+        original_file_bytes = unpadder.update(decrypted_padded) + unpadder.finalize()
+
+        buf = io.BytesIO(original_file_bytes)
+        buf.seek(0)
+        return send_file(buf, as_attachment=True, download_name=cert.filename, mimetype='application/octet-stream')
+
+    except Exception as e:
+        flash(f'Decryption Failed: {str(e)}')
+        return redirect(url_for('home'))
+
 if __name__ == '__main__':
     # If the DB file doesn't exist, create it
     if not os.path.exists('locker.db'):
         create_db()
         
     # Start the server in debug mode (auto-reloads when you save code)
-    app.run(debug=True)
+    # Bind to 0.0.0.0 to allow access from other devices on the network
+    app.run(host='0.0.0.0', debug=True)

@@ -19,6 +19,7 @@
                 <tr>
                     <th>File ID</th>
                     <th>Filename</th>
+                    <th>Status</th>
                     <th>Upload Date</th>
                     <th>Actions</th>
                 </tr>
@@ -28,15 +29,36 @@
                 <tr>
                     <td>#{{ cert.id }}</td>
                     <td>{{ cert.filename }}</td>
+                    <td>
+                        {% if cert.is_public %}
+                        <span class="badge bg-success">Public</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Private</span>
+                        {% endif %}
+                    </td>
                     <td>{{ cert.upload_date.strftime('%Y-%m-%d') }}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-success">Generate QR</button>
-                        <button class="btn btn-sm btn-outline-info">View</button>
+                        <a href="{{ url_for('generate_qr', cert_id=cert.id) }}" target="_blank" class="btn btn-sm btn-outline-success">Generate QR</a>
+                        <a href="{{ url_for('download_certificate', cert_id=cert.id) }}" class="btn btn-sm btn-outline-info">View</a>
+                        <a href="{{ url_for('verify_certificate', cert_id=cert.id) }}" class="btn btn-sm btn-outline-secondary">Verify Link</a>
+                        <form method="POST" action="{{ url_for('delete_certificate', cert_id=cert.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this file?')">Delete</button>
+                        </form>
+                        {% if cert.is_public %}
+                        <form method="POST" action="{{ url_for('toggle_public', cert_id=cert.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-warning">Make Private</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('toggle_public', cert_id=cert.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-success">Make Public</button>
+                        </form>
+                        {% endif %}
+                        <img src="{{ url_for('generate_qr', cert_id=cert.id) }}" width="50" height="50" title="Scan to Verify" class="ms-2">
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted">No certificates uploaded yet.</td>
+                    <td colspan="5" class="text-center text-muted">No certificates uploaded yet.</td>
                 </tr>
                 {% endfor %}
             </tbody>
