@@ -134,30 +134,6 @@ See `.env.example` for all available configuration options:
 - **File Upload**: `MAX_FILE_SIZE`, `ALLOWED_EXTENSIONS`
 - **Flask Settings**: `DEBUG`, `FLASK_HOST`, `FLASK_PORT`
 
-## Production Deployment
-
-### Security Checklist
-
-- [ ] Set `DEBUG=False` in `.env`
-- [ ] Generate strong `SECRET_KEY` (32+ characters)
-- [ ] Set strong `RSA_KEY_PASSPHRASE` (32+ characters)
-- [ ] Change all access codes
-- [ ] Change default admin password
-- [ ] Use HTTPS (configure reverse proxy like Nginx)
-- [ ] Set `FLASK_HOST=127.0.0.1` (use reverse proxy for external access)
-- [ ] Backup `private_key.pem` securely (required for decryption!)
-- [ ] Regular database backups
-- [ ] Monitor access logs regularly
-
-### Recommended Production Setup
-
-1. Use a production WSGI server (Gunicorn, uWSGI)
-2. Use a reverse proxy (Nginx, Apache)
-3. Enable HTTPS with SSL certificates
-4. Use PostgreSQL or MySQL instead of SQLite
-5. Implement proper key rotation policies
-6. Set up monitoring and alerting
-
 ## Project Structure
 
 ```
