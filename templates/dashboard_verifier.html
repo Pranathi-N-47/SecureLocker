@@ -4,17 +4,19 @@
 <div class="row justify-content-center">
     <div class="col-md-8">
         <h2 class="mb-4 text-center">Certificate Verification Portal</h2>
-        
+
         <div class="card shadow p-4 mb-4">
-            <img src="https://img.icons8.com/ios/100/28a745/security-checked.png" class="mx-auto d-block mb-3" style="width: 80px;">
+            <img src="https://img.icons8.com/ios/100/28a745/security-checked.png" class="mx-auto d-block mb-3"
+                style="width: 80px;">
             <h4>Verify a Document</h4>
             <p class="text-muted">
                 Enter the Certificate ID or Scan the QR Code provided by the student to verify the digital signature.
             </p>
-            
+
             <form action="{{ url_for('verify_certificate', cert_id=0) }}" method="GET" class="mt-3">
                 <div class="input-group mb-3">
-                    <input type="text" class="form-control" name="cert_id" placeholder="Enter Certificate ID" aria-label="Certificate ID" required>
+                    <input type="text" class="form-control" name="cert_id" placeholder="Enter Certificate ID"
+                        aria-label="Certificate ID" required>
                     <button class="btn btn-success" type="submit">Verify Integrity</button>
                 </div>
             </form>
@@ -36,11 +38,13 @@
                 <tr>
                     <td>#{{ cert.id }}</td>
                     <td>{{ cert.filename }}</td>
-                    <td>User #{{ cert.student_id }}</td>
+                    <td>{{ cert.owner.name }}</td>
                     <td>{{ cert.upload_date.strftime('%Y-%m-%d') }}</td>
                     <td>
-                        <a href="{{ url_for('verify_certificate', cert_id=cert.id) }}" class="btn btn-sm btn-outline-primary">Verify</a>
-                        <a href="{{ url_for('download_certificate', cert_id=cert.id) }}" class="btn btn-sm btn-outline-info">Download</a>
+                        <a href="{{ url_for('verify_certificate', cert_id=cert.id) }}"
+                            class="btn btn-sm btn-outline-primary">Verify</a>
+                        <a href="{{ url_for('download_certificate', cert_id=cert.id) }}"
+                            class="btn btn-sm btn-outline-info">Download</a>
                     </td>
                 </tr>
                 {% else %}
