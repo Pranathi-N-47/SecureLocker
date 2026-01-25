@@ -177,7 +177,8 @@ SecureLocker/
 ├── requirements.txt         # Python dependencies
 │
 ├── README.md                # Setup guide & documentation
-└── SECURITY.md              # Security features & best practices```
+└── SECURITY.md              # Security features & best practices
+```
 
 ## Key Management
 
