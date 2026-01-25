@@ -134,22 +134,50 @@ See `.env.example` for all available configuration options:
 - **File Upload**: `MAX_FILE_SIZE`, `ALLOWED_EXTENSIONS`
 - **Flask Settings**: `DEBUG`, `FLASK_HOST`, `FLASK_PORT`
 
-## Project Structure
+## Final Project Structure
 
 ```
 SecureLocker/
-├── app.py                 # Main application
-├── models.py              # Database models
-├── config.py              # Configuration management
-├── security.py            # Security utilities
-├── requirements.txt       # Python dependencies
-├── .env.example           # Environment variables template
-├── .env                   # Your secrets (DO NOT COMMIT!)
-├── templates/             # HTML templates
-├── instance/              # Database files
-├── private_key.pem        # RSA private key (DO NOT COMMIT!)
-└── public_key.pem         # RSA public key (DO NOT COMMIT!)
-```
+│
+├── templates/               # HTML templates (Flask views)
+│   ├── base.html               # Base template with navbar
+│   ├── dashboard_admin.html    # Admin panel with tabs (certs + logs)
+│   ├── dashboard_student.html  # Student dashboard (upload & manage)
+│   ├── dashboard_verifier.html # Verifier portal (verify public certs)
+│   ├── login.html              # Login page
+│   ├── otp.html                # OTP verification (MFA)
+│   ├── register.html           # Registration with real-time validation
+│   ├── upload.html             # File upload form
+│   └── verify_result.html      # Certificate verification result
+│
+├── instance/                # Database storage (gitignored)
+│   └── locker.db               # SQLite database (if using instance path)
+│
+├── venv/                    # Virtual environment (gitignored)
+│
+├── __pycache__/             # Python cache (gitignored)
+│
+├── app.py                   # Main Flask application (routes + MFA)
+├── models.py                # Database models (User, Certificate, AccessLog)
+├── config.py                # Configuration management (loads .env)
+├── security.py              # Security utilities (validation, rate limiting, crypto)
+│
+├── init_db.py               # Database initialization script
+├── generate_secrets.py      # Generates random secrets for .env
+│
+├── private_key.pem          # RSA private key (gitignored, ENCRYPTED)
+├── public_key.pem           # RSA public key (gitignored)
+│
+├── locker.db                # SQLite database (gitignored, in project root)
+│
+├── .env                      # Environment variables (gitignored, SECRETS)
+├── .env.example             # Template for .env (committed)
+├── .gitignore               # Git ignore rules
+│
+├── requirements.txt         # Python dependencies
+│
+├── README.md                # Setup guide & documentation
+└── SECURITY.md              # Security features & best practices```
 
 ## Key Management
 
