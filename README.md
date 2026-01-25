@@ -1,4 +1,4 @@
-# SecureLocker - Educational Cybersecurity Project
+# SecureLocker
 
 A Flask-based secure document management system demonstrating enterprise-grade security practices including hybrid encryption (AES + RSA), digital signatures, multi-factor authentication, and role-based access control.
 
