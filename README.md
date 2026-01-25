@@ -1,41 +1,38 @@
-# SecureLocker - Secure Document Management System
+# SecureLocker - Educational Cybersecurity Project
 
-A Flask-based secure document management system with hybrid encryption (AES + RSA), digital signatures, multi-factor authentication, and role-based access control.
+A Flask-based secure document management system demonstrating enterprise-grade security practices including hybrid encryption (AES + RSA), digital signatures, multi-factor authentication, and role-based access control.
 
-## Features
+## What This Project Demonstrates
 
-- **Hybrid Encryption**: AES-256 for file encryption + RSA-2048 for key encryption
-- **Digital Signatures**: RSA-PSS signatures for document authenticity verification
-- **Multi-Factor Authentication (MFA)**: OTP-based second factor with expiration
-- **Role-Based Access Control**: Three roles (Student, Verifier, Admin) with different permissions
-- **Secure Storage**: Encrypted RSA private keys, hashed passwords with salt
-- **Rate Limiting**: Protection against brute force attacks
-- **Access Logging**: Complete audit trail of all actions
-- **QR Code Integration**: Easy certificate verification via QR codes
+### Core Security Concepts
+- **Hybrid Encryption**: AES-256 (symmetric) + RSA-2048 (asymmetric)
+- **Digital Signatures**: RSA-PSS for document authenticity verification
+- **Multi-Factor Authentication**: Password + Time-based OTP
+- **Role-Based Access Control**: Three-tier permission system
+- **Security Auditing**: Complete access logging and audit trails
+- **Input Validation**: Protection against injection and malicious uploads
+- **Rate Limiting**: Brute force attack prevention
 
-## Quick Start
+### Technologies & Security Features
+- **Cryptography**: Python `cryptography` library for industry-standard encryption
+- **Password Hashing**: PBKDF2-SHA256 with automatic salting
+- **Session Management**: Secure Flask sessions with cryptographic signing
+- **Database Security**: Encrypted data at rest, secure foreign key relationships
+- **Configuration Management**: Environment-based secrets (never hardcoded)
 
-### Prerequisites
-
-- Python 3.8 or higher
-- pip package manager
+## Quick Start (Local Development)
 
 ### Installation
 
-1. **Clone the repository**
+1. **Clone and navigate to the repository**
    ```bash
    cd SecureLocker
    ```
 
-2. **Create a virtual environment**
+2. **Create virtual environment**
    ```bash
    python -m venv venv
-   
-   # Windows
-   venv\Scripts\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
+   venv\Scripts\activate    # Windows
    ```
 
 3. **Install dependencies**
@@ -43,190 +40,128 @@ A Flask-based secure document management system with hybrid encryption (AES + RS
    pip install -r requirements.txt
    ```
 
-4. **Configure environment variables**
-   
-   Copy `.env.example` to `.env`:
+4. **Generate secrets**
    ```bash
-   copy .env.example .env    # Windows
-   cp .env.example .env      # macOS/Linux
+   python generate_secrets.py
    ```
-   
-   Edit `.env` and set secure values:
-   ```bash
-   # Generate a secure secret key
-   python -c "import secrets; print(secrets.token_hex(32))"
-   
-   # Use this output for SECRET_KEY in .env
-   ```
-   
-   **IMPORTANT**: Change ALL default values in `.env`, especially:
-   - `SECRET_KEY`
-   - `RSA_KEY_PASSPHRASE`
-   - Access codes for each role
+   This creates a `.env` file with secure random secrets.
 
-5. **Run the application**
+5. **Initialize database**
+   ```bash
+   python init_db.py
+   ```
+
+6. **Run the application**
    ```bash
    python app.py
    ```
-   
-   The application will be available at `http://localhost:5000`
+   Access at `http://localhost:5000`
 
-### Default Admin Account
+### Default Credentials
 
-- **Username**: `admin`
-- **Password**: `admin123`
-- **⚠️ CHANGE THIS PASSWORD IMMEDIATELY IN PRODUCTION**
+- **Admin**: username `admin`, password `admin123`
+- **Access codes**: Check your `.env` file after running `generate_secrets.py`
 
-## Usage
+## System Architecture
 
-### Student Workflow
+### User Roles & Permissions
 
-1. Register with student access code
-2. Login with username and password
-3. Enter OTP (displayed in console)
-4. Upload encrypted certificates
-5. Toggle visibility (public/private)
-6. Generate QR codes for verification
+| Role | Upload | View Own | View Public | View All | Download | Audit Logs |
+|------|--------|----------|-------------|----------|----------|------------|
+| **Student** | ✅ | ✅ | ❌ | ❌ | Own files | ❌ |
+| **Verifier** | ❌ | ❌ | ✅ | ❌ | Public files | ❌ |
+| **Admin** | ❌ | ❌ | ❌ | ✅ | All files | ✅ |
 
-### Verifier Workflow
+### Security Workflow
 
-1. Register with verifier access code
-2. View public certificates
-3. Scan QR codes to verify authenticity
-4. Download and verify signatures
+1. **Upload**: Student uploads certificate → AES-256 encryption → RSA-2048 key encryption → Digital signature generation
+2. **Storage**: Encrypted data + encrypted key + signature stored in database
+3. **Verification**: Verifier accesses public certificate → Decryption → Signature verification → VALID/TAMPERED status
+4. **Auditing**: All actions logged with timestamp, user, and action details
 
-### Admin Workflow
-
-1. Login as admin
-2. View all certificates
-3. Monitor access logs
-4. Manage system security
-
-## Security Configuration
-
-### Password Requirements
-
-- Minimum 8 characters
-- At least one uppercase letter
-- At least one lowercase letter
-- At least one number
-
-### Rate Limiting
-
-- Login: 10 attempts per minute
-- OTP verification: 5 attempts per minute
-- Failed logins: 5 attempts before 15-minute lockout
-- OTP attempts: 3 attempts before requiring re-login
-
-### File Upload Limits
-
-- Maximum file size: 10MB (configurable in `.env`)
-- Allowed extensions: pdf, png, jpg, jpeg, doc, docx (configurable in `.env`)
-
-## Environment Variables
-
-See `.env.example` for all available configuration options:
-
-- **Security**: `SECRET_KEY`, `RSA_KEY_PASSPHRASE`
-- **Access Control**: `STUDENT_ACCESS_CODE`, `VERIFIER_ACCESS_CODE`, `ADMIN_ACCESS_CODE`
-- **MFA Settings**: `OTP_EXPIRATION_SECONDS`, `OTP_MAX_ATTEMPTS`
-- **Rate Limiting**: `MAX_LOGIN_ATTEMPTS`, `LOGIN_LOCKOUT_DURATION`
-- **File Upload**: `MAX_FILE_SIZE`, `ALLOWED_EXTENSIONS`
-- **Flask Settings**: `DEBUG`, `FLASK_HOST`, `FLASK_PORT`
-
-## Final Project Structure
+## Project Structure
 
 ```
 SecureLocker/
-│
-├── templates/               # HTML templates (Flask views)
-│   ├── base.html               # Base template with navbar
-│   ├── dashboard_admin.html    # Admin panel with tabs (certs + logs)
-│   ├── dashboard_student.html  # Student dashboard (upload & manage)
-│   ├── dashboard_verifier.html # Verifier portal (verify public certs)
-│   ├── login.html              # Login page
-│   ├── otp.html                # OTP verification (MFA)
-│   ├── register.html           # Registration with real-time validation
-│   ├── upload.html             # File upload form
-│   └── verify_result.html      # Certificate verification result
-│
-├── instance/                # Database storage (gitignored)
-│   └── locker.db               # SQLite database (if using instance path)
-│
-├── venv/                    # Virtual environment (gitignored)
-│
-├── __pycache__/             # Python cache (gitignored)
-│
-├── app.py                   # Main Flask application (routes + MFA)
-├── models.py                # Database models (User, Certificate, AccessLog)
-├── config.py                # Configuration management (loads .env)
-├── security.py              # Security utilities (validation, rate limiting, crypto)
-│
-├── init_db.py               # Database initialization script
-├── generate_secrets.py      # Generates random secrets for .env
-│
-├── private_key.pem          # RSA private key (gitignored, ENCRYPTED)
-├── public_key.pem           # RSA public key (gitignored)
-│
-├── locker.db                # SQLite database (gitignored, in project root)
-│
-├── .env                      # Environment variables (gitignored, SECRETS)
-├── .env.example             # Template for .env (committed)
-├── .gitignore               # Git ignore rules
-│
-├── requirements.txt         # Python dependencies
-│
-├── README.md                # Setup guide & documentation
-└── SECURITY.md              # Security features & best practices
+├── templates/              # HTML templates
+│   ├── dashboard_*.html    # Role-specific dashboards
+│   ├── login.html          # Authentication pages
+│   └── register.html       # Real-time password validation
+├── app.py                  # Main Flask application
+├── models.py               # Database models (User, Certificate, AccessLog)
+├── config.py               # Configuration management
+├── security.py             # Security utilities & validation
+├── init_db.py             # Database initialization
+├── generate_secrets.py     # Secret generation utility
+├── requirements.txt        # Python dependencies
+├── .env.example           # Configuration template
+└── SECURITY.md            # Security documentation
 ```
 
-## Key Management
+## Security Implementation Details
 
-### RSA Keys
+### Encryption (Hybrid AES + RSA)
+- Files encrypted with AES-256-CBC (fast for large files)
+- AES keys encrypted with RSA-2048-OAEP (secure key management)
+- Initialization vectors (IV) for randomization
+- PKCS7 padding for block alignment
 
-- Generated automatically on first run
-- Private key encrypted with passphrase from `.env`
-- Stored in `private_key.pem` and `public_key.pem`
-- **CRITICAL**: Backup `private_key.pem` - loss means permanent data loss!
+### Digital Signatures
+- SHA-256 hashing of file content
+- RSA-PSS signature scheme
+- Public key verification
+- Tamper detection on every access
 
-### Key Rotation
+### Authentication & Authorization
+- Password hashing with PBKDF2-SHA256
+- Automatic salt generation
+- 6-digit OTP with 5-minute expiration
+- Maximum 3 OTP attempts before re-login required
+- Account lockout after 5 failed login attempts
 
-Currently, key rotation requires:
-1. Backup all existing certificates
-2. Decrypt with old key
-3. Generate new keys
-4. Re-encrypt with new key
+### Rate Limiting
+- Login: 10 attempts/minute
+- OTP: 5 attempts/minute
+- Failed logins: 15-minute lockout after 5 attempts
 
-## Troubleshooting
 
-### "Decryption Failed" error
-- Private key passphrase may have changed
-- Database was created with different keys
-- Solution: Delete database and start fresh (loses all data)
+## Technologies Used
 
-### "OTP has expired"
-- OTP valid for 5 minutes (default)
-- Increase `OTP_EXPIRATION_SECONDS` in `.env` if needed
+- **Backend**: Flask 2.3.3, SQLAlchemy 3.0.5
+- **Security**: cryptography 41.0.7, Flask-Login 0.6.3, Flask-Limiter 3.5.0
+- **Database**: SQLite (file-based, portable)
+- **Authentication**: Custom MFA with OTP
+- **Frontend**: Bootstrap 5, Vanilla JavaScript (real-time validation)
 
-### "Account temporarily locked"
-- Too many failed login attempts
-- Wait for lockout duration (default: 15 minutes)
-- Or reset `failed_login_attempts` in database
+## Key Files & Their Purpose
 
-### Database errors after model changes
-- Delete `instance/locker.db` to recreate
-- Or use Flask-Migrate for proper migrations (coming soon)
+- **app.py**: Routes, authentication logic, file upload/download handlers
+- **models.py**: Database schema with security considerations (indexes, cascades)
+- **security.py**: Reusable security functions (validation, rate limiting, crypto helpers)
+- **config.py**: Environment-based configuration (12-factor app pattern)
+- **init_db.py**: Database setup with proper schema initialization
+
+## Important Notes
+
+⚠️ **Educational Project**: This is designed for learning and demonstration purposes. While it implements real security features correctly, it's optimized for educational clarity rather than enterprise scale.
+
+🔐 **Key Management**: The RSA private key is critical - without it, encrypted data cannot be recovered. The key is encrypted with a passphrase from your `.env` file.
+
+📊 **Database**: Uses SQLite for simplicity. All encryption happens before storage, so even raw database access reveals only encrypted data.
+
+## Documentation
+
+- **SECURITY.md**: Detailed security features, threat model, and best practices
+- **Code Comments**: Extensive inline documentation explaining security decisions
+- **.env.example**: Configuration template with explanations
 
 ## License
 
-Educational project for cybersecurity demonstrations.
-
-## Support
-
-For issues and questions, please check the documentation files:
-- `SECURITY.md` - Security features and threat model
-- `implementation_plan.md` - Technical implementation details
+Educational project demonstrating cybersecurity concepts.
 
 ---
 
-**⚠️ IMPORTANT**: This system is designed for educational purposes. Ensure proper security review before production deployment.
+**Project Purpose**: Academic demonstration of secure application development practices and cryptographic implementation.
+
+**Author**: Pranathi N  
+**Repository**: [github.com/Pranathi-N-47/SecureLocker](https://github.com/Pranathi-N-47/SecureLocker)
